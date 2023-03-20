@@ -1,0 +1,290 @@
+
+# Installing and loading packages -----------------------------------------
+
+pacotes <- c("plotly","tidyverse","knitr","kableExtra","PerformanceAnalytics",
+             "factoextra","reshape2","psych","ggrepel")
+
+if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
+  instalador <- pacotes[!pacotes %in% installed.packages()]
+  for(i in 1:length(instalador)) {
+    install.packages(instalador, dependencies = T)
+    break()}
+  sapply(pacotes, require, character = T) 
+} else {
+  sapply(pacotes, require, character = T) 
+}
+
+
+
+setwd("/Users/robertorodrigues/Documents/Usp_solar")
+
+
+
+#Load the dataset 
+solar56 <- read.csv("2019_select.csv", sep = ",", dec = ".", header = T)
+
+#dataset to numeric type 2
+rownames(solar56) <- solar56[,1]
+solar56 <- solar56[,-1]
+
+# (2x) to eliminate 'generation' feature
+#solar56 <-solar56[,-1]
+
+
+
+# drop avg..Surface.area..sq..km... (zero for all of them)
+
+solar56 <- solar56[,-(51)]
+
+solar56%>% 
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", 
+                full_width = TRUE, 
+                font_size = 12)
+
+dim(solar56)
+
+#Zscale for Generation column
+solar56$max..Generation.. <- scale(solar56$max..Generation..)
+
+solar56$max..Generation.. <- (solar56$max..Generation..)**2
+
+
+
+# Saving the correlation matrix -----------------------------------
+rho <- cor(solar56[,2:54])
+rho
+
+
+
+
+#  KMO -------------------------------------------------------
+KMO(r = rho)
+
+
+#  Bartlett test  --------------------------------------
+cortest.bartlett(R = rho)
+
+
+
+
+
+
+# Model 
+afpc3 <- prcomp(solar56)
+summary(afpc3)
+
+
+
+
+# How many factors
+ggplotly(
+  fviz_eig(X = afpc3,
+           ggtheme = theme_bw(), 
+           barcolor = "black", 
+           barfill = "dodgerblue4",
+           linecolor = "darkgoldenrod3")
+)
+
+# Extracting factor loadings 
+j <- 4 # number of factors
+cargas_fatoriais3 <- afpc3$rotation[, 1:j] %*% diag(afpc3$sdev[1:j])
+
+# Extracting factor loadings  2
+
+
+data.frame(cargas_fatoriais3) %>%
+  rename(F1 = X1,
+         F2 = X2,
+         F3 = X3,
+         F4 = X4) %>%#,
+         #F5 = X5,
+         #F6 = X6
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", 
+                full_width = T, 
+                font_size = 12)
+
+
+
+#Visualizando os pesos que cada variável tem em cada componente principal 
+#obtido pela PCA
+data.frame(afpc3$rotation)[1] 
+
+
+
+# Visualizing Communalities
+data.frame(rowSums(cargas_fatoriais3 ^ 2)) %>%
+  rename(comunalidades3 = 1) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", 
+                full_width = T, 
+                font_size = 12)
+
+
+
+# Factor loadings and communalities report
+data.frame(cargas_fatoriais3) %>%
+  rename(F1 = X1,
+         F2 = X2,
+         F3 = X3,
+         F4 = X4) %>%#,
+         #F5 = X5,
+         #F6 =X6
+  mutate(Comunalidades3 = rowSums(cargas_fatoriais3 ^ 2)) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", 
+                full_width = T, 
+                font_size = 12)
+
+summary(afpc3)
+round(summary(afpc3)$importance[2,3] * 100, digits = 2)
+
+# Plotagem das Cargas Fatoriais
+data.frame(cargas_fatoriais3) %>%
+  ggplot(aes(x = X1, y = X2)) +
+  geom_point(color = "dodgerblue4") +
+  geom_hline(yintercept = 0, color = "darkgoldenrod3", linetype = "dashed") +
+  geom_vline(xintercept = 0, color = "darkgoldenrod3", linetype = "dashed") +
+  geom_text_repel(label = row.names(cargas_fatoriais3)) +
+  labs(x = paste("F1", paste0("(",
+                              round(summary(afpc3)$importance[2,1] * 100,
+                                    digits = 2),
+                              "%)")),
+       y = paste("F2", paste0("(",
+                              round(summary(afpc3)$importance[2,2] * 100,
+                                    digits = 2),
+                              "%)"))) +
+  theme_bw()
+
+
+
+
+# Factor Scores 
+scores_fatoriais3 <- t(afpc3$rotation)/afpc3$sdev 
+colnames(scores_fatoriais3) <- colnames(solar56)
+
+scores_fatoriais3 %>% kable() %>%
+  kable_styling(bootstrap_options = "striped", 
+                full_width = T, 
+                font_size = 12)
+
+scores_fatoriais3 %>%
+  t() %>%
+  data.frame() %>%
+  rename(PC1 = 1,
+         PC2 = 2,
+         PC3 = 3,
+         PC4 = 4) %>%#,
+#         PC5 = 5,
+#         PC6 = 6
+  dplyr::select(PC1, PC2, PC3, PC4) %>%#, PC5, PC6
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", 
+                full_width = T, 
+                font_size = 12)
+
+
+
+# Calculating factor scores 
+score_D1 <- scores_fatoriais3[1,]
+score_D1
+
+score_D2 <- scores_fatoriais3[2,]
+score_D2
+
+score_D3 <- scores_fatoriais3[3,]
+score_D3
+
+score_D4 <- scores_fatoriais3[4,]
+score_D4
+
+#score_D5 <- scores_fatoriais3[5,]
+#score_D5
+
+#score_D6 <- scores_fatoriais3[6,]
+#score_D5
+
+# Establishing a ranking 
+
+F1 <- t(apply(solar56, 1, function(x) x * score_D1))
+F2 <- t(apply(solar56, 1, function(x) x * score_D2))
+F3 <- t(apply(solar56, 1, function(x) x * score_D3))
+F4 <- t(apply(solar56, 1, function(x) x * score_D4))
+#F5 <- t(apply(solar56, 1, function(x) x * score_D5))
+#F6 <- t(apply(solar56, 1, function(x) x * score_D6))
+
+
+F1 <- data.frame(F1) %>%
+  mutate(fator1 = rowSums(.) * 1)
+
+F1 %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", 
+                full_width = T, 
+                font_size = 12)
+
+F2 <- data.frame(F2) %>%
+  mutate(fator2 = rowSums(.) * -1)
+
+F2 %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", 
+                full_width = T, 
+                font_size = 12)
+
+F3 <- data.frame(F3) %>%
+  mutate(fator3 = rowSums(.) * -1)
+
+F4 <- data.frame(F4) %>%
+  mutate(fator4 = rowSums(.) * -1)
+
+#F5 <- data.frame(F5) %>%
+#  mutate(fator5 = rowSums(.) * -1)
+
+#F6 <- data.frame(F6) %>%
+#  mutate(fator6 = rowSums(.) * -1)
+
+
+solar56["Fator1"] <- F1$fator1
+solar56["Fator2"] <- F2$fator2
+solar56["Fator3"] <- F3$fator3
+solar56["Fator4"] <- F4$fator4
+#solar56["Fator5"] <- F5$fator5
+#solar56["Fator6"] <- F6$fator6
+
+
+# Dataset for clustering
+
+solar_fator <- solar56 %>%
+  #t() %>%
+  data.frame() %>%
+  dplyr::select(Fator1, Fator2, Fator3, Fator4)#, Fator5, Fator6 
+
+solar_fator
+
+write.csv(solar_fator,"pca2019.csv", row.names = TRUE)
+
+
+#Criando um ranking pela soma ponderada dos fatores por sua variância
+#compartilhada:
+
+#Calculando a variância compartilhada
+var_compartilhada <- (afpc3$sdev ^ 2/sum(afpc3$sdev ^ 2))
+var_compartilhada
+
+solar56 %>%
+  mutate(pontuacao = Fator1 * var_compartilhada[1] +
+           Fator2 * var_compartilhada[2]+
+           Fator3 * var_compartilhada[3]+
+           Fator4 * var_compartilhada[4]) -> solar56#+
+#           Fator5 * var_compartilhada[5]+
+#           Fator6 * var_compartilhada[6]
+
+# Visualizando o ranking final
+solar56 %>%
+  arrange(desc(pontuacao)) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", 
+                full_width = T, 
+                font_size = 12)
